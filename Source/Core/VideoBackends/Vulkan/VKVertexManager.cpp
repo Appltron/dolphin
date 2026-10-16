@@ -374,6 +374,12 @@ void VertexManager::UploadUtilityUniforms(const void* data, u32 data_size)
   {
     WARN_LOG_FMT(VIDEO, "Executing command buffer while waiting for ext space in uniform buffer");
     VKGfx::GetInstance()->ExecuteCommandBuffer(false);
+	if (!m_uniform_stream_buffer->ReserveMemory(data_size,
+                                            g_vulkan_context->GetUniformBufferAlignment()))
+{
+  PanicAlertFmt("Failed to allocate space for utility uniforms in streaming buffer");
+  return;
+}
   }
 
   StateTracker::GetInstance()->SetUtilityUniformBuffer(
