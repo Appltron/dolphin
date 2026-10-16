@@ -386,24 +386,27 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
   VkDeviceSize upload_buffer_offset;
 
   // Does this texture data fit within the streaming buffer?
-  StreamBuffer* stream_buffer = nullptr;
-if (upload_size <= STAGING_TEXTURE_UPLOAD_THRESHOLD)
-{
-  stream_buffer = g_object_cache->GetTextureUploadBuffer();
-  // On failure, fall back to a one-off staging buffer instead of submitting the frame.
-  if (!stream_buffer->ReserveMemory(upload_size, upload_alignment))
-    stream_buffer = nullptr;
-}
+  if (upload_size <= STAGING_TEXTURE_UPLOAD_THRESHOLD)
+  {
+    StreamBuffer* stream_buffer = g_object_cache->GetTextureUploadBuffer();
+    if (!stream_buffer->ReserveMemory(upload_size, upload_alignment))
+    {
+      // Execute the command buffer first.
+      WARN_LOG_FMT(VIDEO,
+                   "Executing command list while waiting for space in texture upload buffer");
+      VKGfx::GetInstance()->ExecuteCommandBuffer(false);
 
-if (stream_buffer)
-{
-  // Copy to the streaming buffer.
-  upload_buffer = stream_buffer->GetBuffer();
-  upload_buffer_offset = stream_buffer->GetCurrentOffset();
-  std::memcpy(stream_buffer->GetCurrentHostPointer(), buffer, upload_size);
-  stream_buffer->CommitMemory(upload_size);
-}
-else
+      // Try allocating again. This may cause a fence wait.
+      if (!stream_buffer->ReserveMemory(upload_size, upload_alignment))
+        PanicAlertFmt("Failed to allocate space in texture upload buffer");
+    }
+    // Copy to the streaming buffer.
+    upload_buffer = stream_buffer->GetBuffer();
+    upload_buffer_offset = stream_buffer->GetCurrentOffset();
+    std::memcpy(stream_buffer->GetCurrentHostPointer(), buffer, upload_size);
+    stream_buffer->CommitMemory(upload_size);
+  }
+  else
   {
     // Create a temporary staging buffer that is destroyed after the image is copied.
     temp_buffer = StagingBuffer::Create(STAGING_BUFFER_TYPE_UPLOAD, upload_size,

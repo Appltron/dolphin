@@ -4,9 +4,11 @@
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 
 #include "Common/Assert.h"
+#include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 
 #include "VideoBackends/Vulkan/VulkanContext.h"
@@ -280,10 +282,19 @@ void CommandBufferManager::WaitForCommandBufferCompletion(u32 index)
   }
 
   // Wait for this command buffer to be completed.
+  const auto wait_start = std::chrono::steady_clock::now();
   VkResult res =
       vkWaitForFences(g_vulkan_context->GetDevice(), 1, &resources.fence, VK_TRUE, UINT64_MAX);
   if (res != VK_SUCCESS)
     LOG_VULKAN_ERROR(res, "vkWaitForFences failed: ");
+  const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - wait_start)
+                           .count();
+  if (wait_ms >= 50 || res != VK_SUCCESS)
+  {
+    WARN_LOG_FMT(VIDEO, "Waited {} ms for command buffer {} (fence counter {}): {}", wait_ms, index,
+                 resources.fence_counter, VkResultToString(res));
+  }
 
   // Clean up any resources for command buffers between the last known completed buffer and this
   // now-completed command buffer. If we use >2 buffers, this may be more than one buffer.

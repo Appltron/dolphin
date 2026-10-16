@@ -148,9 +148,16 @@ bool StreamBuffer::ReserveMemory(u32 num_bytes, u32 alignment)
   // We tried everything we could, and still couldn't get anything. This means that too much space
   // in the buffer is being used by the command buffer currently being recorded. Therefore, the
   // only option is to execute it, and wait until it's done.
-  WARN_LOG_FMT(VIDEO,
-             "StreamBuffer exhausted: size={} offset={} gpu_pos={} request={} (+{} align)",
-             m_size, m_current_offset, m_current_gpu_position, num_bytes, alignment);
+  static u32 s_exhausted_count = 0;
+  ++s_exhausted_count;
+  if (s_exhausted_count <= 20 || (s_exhausted_count % 500) == 0)
+  {
+    WARN_LOG_FMT(VIDEO,
+                 "StreamBuffer exhausted (#{}): size={} offset={} gpu_pos={} request={} "
+                 "(+{} align)",
+                 s_exhausted_count, m_size, m_current_offset, m_current_gpu_position, num_bytes,
+                 alignment);
+  }
   return false;
 }
 
