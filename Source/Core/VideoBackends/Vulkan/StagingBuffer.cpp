@@ -167,32 +167,29 @@ bool StagingBuffer::AllocateBuffer(STAGING_BUFFER_TYPE type, VkDeviceSize size,
   VkResult res = vmaCreateBuffer(g_vulkan_context->GetMemoryAllocator(), &buffer_create_info,
                                  &alloc_create_info, out_buffer, out_alloc, &alloc_info);
 
-  if (res != VK_SUCCESS)
-{
-  LOG_VULKAN_ERROR(res, "vmaCreateBuffer failed: ");
-  return false;
-}
-
-VkMemoryPropertyFlags flags = 0;
-vmaGetMemoryTypeProperties(g_vulkan_context->GetMemoryAllocator(), alloc_info.memoryType,
-                           &flags);
-if (type == STAGING_BUFFER_TYPE_UPLOAD)
-{
-  if (!(flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+  if (type == STAGING_BUFFER_TYPE_UPLOAD)
   {
-    WARN_LOG_FMT(VIDEO, "Vulkan: Failed to find a coherent memory type for uploads, this will "
-                        "affect performance.");
+    VkMemoryPropertyFlags flags = 0;
+    vmaGetMemoryTypeProperties(g_vulkan_context->GetMemoryAllocator(), alloc_info.memoryType,
+                               &flags);
+    if (!(flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+    {
+      WARN_LOG_FMT(VIDEO, "Vulkan: Failed to find a coherent memory type for uploads, this will "
+                          "affect performance.");
+    }
   }
-}
-else if (!(flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT))
-{
-  WARN_LOG_FMT(VIDEO, "Vulkan: readback staging memory (type flags {:#x}) is not host-cached; "
-                      "CPU reads of EFB data will be slow.",
-               static_cast<u32>(flags));
-}
 
-*out_map_ptr = static_cast<char*>(alloc_info.pMappedData);
-return true;
+  *out_map_ptr = static_cast<char*>(alloc_info.pMappedData);
+
+  if (res != VK_SUCCESS)
+  {
+    LOG_VULKAN_ERROR(res, "vmaCreateBuffer failed: ");
+    return false;
+  }
+
+  VkMemoryPropertyFlags flags = 0;
+  vmaGetAllocationMemoryProperties(g_vulkan_context->GetMemoryAllocator(), *out_alloc, &flags);
+  return true;
 }
 
 std::unique_ptr<StagingBuffer> StagingBuffer::Create(STAGING_BUFFER_TYPE type, VkDeviceSize size,
